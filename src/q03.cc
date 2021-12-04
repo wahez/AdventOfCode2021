@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <bitset>
 #include <istream>
 #include <ranges>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -10,37 +12,67 @@
 namespace {
 
 
-	struct BitwiseCount
+	struct Bitset
 	{
-		std::vector<int> bit_count;
-		int num_entries = 0;
+		std::bitset<31> bits;
+		int num_bits;
 	};
 
-
-	BitwiseCount operator+(BitwiseCount lhs, const std::string& rhs)
+	std::istream& operator>>(std::istream& is, Bitset& bitset)
 	{
-		if (lhs.num_entries == 0)
-			lhs.bit_count.resize(rhs.size());
-		else if (lhs.bit_count.size() != rhs.size())
-			throw std::runtime_error("Unequal number of bits");
-		for (auto i = 0; i < std::ssize(rhs); ++i)
-			if (rhs[i] == '1')
-				++lhs.bit_count[i];
-		++lhs.num_entries;
-		return lhs;
+		std::string s;
+		is >> s;
+		if (s.size() > bitset.bits.size())
+			throw std::runtime_error("Too many bits");
+		bitset.num_bits = s.size();
+		std::stringstream ss(s);
+		ss >> bitset.bits;
+		return is;
 	}
 
 
-	template<typename Op = std::plus<>>
-	auto accumulate(std::ranges::input_range auto&& range, auto init, Op&& op = Op{})
+	auto find_most_common_bits(const auto& inputs)
 	{
-		std::ranges::for_each(
-				range,
-				[&](const auto& element)
+		auto bits = 0;
+		for (int i = inputs[0].num_bits - 1; i >= 0; --i)
+		{
+			const auto num_ones = std::ranges::count_if(
+				inputs,
+				[&](const auto& input)
 				{
-					init = std::move(init) + element;
+					return input.bits[i] == 1;
 				});
-		return init;
+			bits = (bits << 1) | (2*num_ones < std::ssize(inputs));
+		}
+		return bits;
+	}
+
+
+	auto find_best_match(auto inputs, bool keep_one)
+	{
+		auto inputs_tmp	= decltype(inputs){};
+		for (int i = inputs[0].num_bits - 1; i >= 0; --i)
+		{
+			const auto count = std::ranges::count_if(
+				inputs,
+				[&](const auto& input)
+				{
+					return input.bits[i] == 1;
+				});
+			const bool expected_value = keep_one ^ (2*count < std::ssize(inputs));
+			std::ranges::copy_if(
+				inputs,
+				std::back_inserter(inputs_tmp),
+				[&](const auto& input)
+				{
+					return input.bits[i] == expected_value;
+				});
+			std::swap(inputs, inputs_tmp);
+			inputs_tmp.clear();
+			if (inputs.size() == 1)
+				return inputs[0];
+		}
+		throw std::runtime_error("Could not find best match");
 	}
 
 
@@ -49,14 +81,19 @@ namespace {
 
 int q03a(std::istream& is)
 {
-	const auto count = accumulate(std::ranges::istream_view<std::string>(is), BitwiseCount{});
-	assert(count.bit_count.size() <= 31);
-	auto gamma = 0;
-	for (const auto& c: count.bit_count)
-	{
-		 gamma <<= 1;
-		 gamma |= (2 * c) / count.num_entries;
-	}
-	auto epsilon = (1 << count.bit_count.size()) - 1 - gamma;
+	std::vector<Bitset> inputs;
+	std::ranges::move(std::ranges::istream_view<Bitset>(is), std::back_inserter(inputs));
+	const auto gamma = find_most_common_bits(inputs);
+	const auto epsilon = (1 << inputs[0].num_bits) - 1 - gamma;
 	return gamma * epsilon;
+}
+
+
+int q03b(std::istream& is)
+{
+	std::vector<Bitset> inputs;
+	std::ranges::move(std::ranges::istream_view<Bitset>(is), std::back_inserter(inputs));
+	const auto oxygen_generator_rating = find_best_match(inputs, true).bits.to_ulong();
+	const auto co2_scrubber_rating = find_best_match(inputs, false).bits.to_ulong();
+	return oxygen_generator_rating * co2_scrubber_rating;
 }

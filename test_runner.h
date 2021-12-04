@@ -18,7 +18,7 @@ public:
 			tests_to_run.insert(argv[i]);
 	}
 
-	void solve(auto&& func, std::string_view name, const std::filesystem::path& path)
+	void operator()(auto&& func, std::string_view name, const std::filesystem::path& path) const
 	{
 		if (!tests_to_run.empty() && !tests_to_run.contains(name))
 		{
@@ -29,7 +29,7 @@ public:
 		std::cout << "Test " << name << " produced " << result << std::endl;
 	}
 
-	void check(auto&& func, std::string_view name, const std::filesystem::path& path, const auto& expected_output)
+	void operator()(auto&& func, std::string_view name, const std::filesystem::path& path, const auto& expected_output) const
 	{
 		if (!tests_to_run.empty() && !tests_to_run.contains(name))
 		{
