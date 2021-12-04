@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <set>
 #include <string>
 #include <string_view>
@@ -12,21 +13,36 @@
 class TestRunner
 {
 public:
-	explicit TestRunner(int argc, char** argv)
+	explicit TestRunner(std::filesystem::path answers_path, int argc, char** argv)
 	{
+		auto answers_file = std::ifstream(answers_path);
+		while (answers_file.good())
+		{
+			auto name = std::string{};
+			auto answer = std::string{};
+			answers_file >> name >> answer;
+			if (answers_file.good())
+				answers.emplace(name, std::stoll(answer));
+		}
 		for (int i = 1; i < argc; ++i)
 			tests_to_run.insert(argv[i]);
 	}
 
 	void operator()(auto&& func, std::string_view name, const std::filesystem::path& path) const
 	{
-		if (!tests_to_run.empty() && !tests_to_run.contains(name))
+		const auto it = answers.find(name);
+		if (it != answers.end())
+			(*this)(func, name, path, it->second);
+		else
 		{
-			std::cout << "Test " << name << " skipped" << std::endl;
-			return;
+			if (!tests_to_run.empty() && !tests_to_run.contains(name))
+			{
+				std::cout << "Test " << name << " skipped" << std::endl;
+				return;
+			}
+			const auto result = run(func, name, path);
+			std::cout << "Test " << name << " produced " << result << std::endl;
 		}
-		const auto result = run(func, name, path);
-		std::cout << "Test " << name << " produced " << result << std::endl;
 	}
 
 	void operator()(auto&& func, std::string_view name, const std::filesystem::path& path, const auto& expected_output) const
@@ -38,7 +54,7 @@ public:
 		}
 		const auto result = run(func, name, path);
 		if (result != expected_output)
-			std::cerr << "Test " << name << " failed with input (" << path << "), expected: " << expected_output << ", got: " << result << std::endl;
+				std::cerr << "Test " << name << " failed with input (" << path << "), expected: " << expected_output << ", got: " << result << std::endl;
 	}
 
 private:
@@ -55,4 +71,5 @@ private:
 		return result;
 	}
 	std::set<std::string, std::less<>> tests_to_run;
+	std::map<std::string, std::int64_t, std::less<>> answers;
 };
