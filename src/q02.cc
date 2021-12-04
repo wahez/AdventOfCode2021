@@ -13,13 +13,6 @@ namespace {
 		up,
 	};
 
-	struct Instruction
-	{
-		Direction direction;
-		int distance;
-	};
-
-
 	inline std::istream& operator>>(std::istream& is, Direction& direction)
 	{
 		std::string word;
@@ -35,9 +28,16 @@ namespace {
 		return is;
 	}
 
+
+	struct Instruction
+	{
+		Direction direction;
+		int x;
+	};
+
 	inline std::istream& operator>>(std::istream& is, Instruction& instruction)
 	{
-		is >> instruction.direction >> instruction.distance;
+		is >> instruction.direction >> instruction.x;
 		return is;
 	}
 
@@ -46,37 +46,8 @@ namespace {
 	{
 		int x;
 		int depth;
+		int aim = 0;
 	};
-
-	Position operator+(Position pos, Instruction instruction)
-	{
-		switch (instruction.direction)
-		{
-		case Direction::down:
-			pos.depth += instruction.distance;
-			break;
-		case Direction::forward:
-			pos.x += instruction.distance;
-			break;
-		case Direction::up:
-			pos.depth -= instruction.distance;
-			break;
-		}
-		return pos;
-	}
-
-
-	template<typename Op = std::plus<>>
-	auto accumulate(std::ranges::input_range auto&& range, auto init, Op&& op = Op{})
-	{
-		std::ranges::for_each(
-				range,
-				[&](const auto& element)
-				{
-					init = std::move(init) + element;
-				});
-		return init;
-	}
 
 
 }
@@ -84,8 +55,48 @@ namespace {
 
 int q02a(std::istream& is)
 {
-	const auto pos = accumulate(
-		std::ranges::istream_view<Instruction>(is),
-		Position{0, 0});
+	auto pos = Position{0, 0};
+	auto move = [&pos](const Instruction& instruction)
+	{
+		switch (instruction.direction)
+		{
+		case Direction::down:
+			pos.depth += instruction.x;
+			break;
+		case Direction::forward:
+			pos.x += instruction.x;
+			break;
+		case Direction::up:
+			pos.depth -= instruction.x;
+			break;
+		}
+	};
+	auto instructions = std::ranges::istream_view<Instruction>(is);
+	std::ranges::for_each(instructions, move);
+	return pos.x * pos.depth;
+}
+
+
+int q02b(std::istream& is)
+{
+	auto pos = Position{0, 0, 0};
+	auto move = [&pos](const Instruction& instruction)
+	{
+		switch (instruction.direction)
+		{
+		case Direction::down:
+			pos.aim += instruction.x;
+			break;
+		case Direction::forward:
+			pos.x += instruction.x;
+			pos.depth += pos.aim * instruction.x;
+			break;
+		case Direction::up:
+			pos.aim -= instruction.x;
+			break;
+		}
+	};
+	auto instructions = std::ranges::istream_view<Instruction>(is);
+	std::ranges::for_each(instructions, move);
 	return pos.x * pos.depth;
 }
