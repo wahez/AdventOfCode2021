@@ -1,12 +1,12 @@
 #include <algorithm>
 #include <array>
+#include <bitset>
 #include <charconv>
 #include <istream>
 #include <ranges>
 #include <vector>
 #include <cassert>
 
-#include <iostream>
 
 namespace {
 
@@ -49,22 +49,23 @@ namespace {
 	{
 		bool stripe(Number number)
 		{
-			const auto place = std::ranges::find(places, number, [](auto&& p) { return p.number; });
+			const auto place = std::ranges::find(places, number);
 			if (place == places.end())
 				return false;
-			place->marked = true;
-			const auto row = std::distance(places.begin(), place) / 5;
-			const auto col = std::distance(places.begin(), place) % 5;
+			const auto index = std::distance(places.begin(), place);
+			marked.set(index);
+			const auto row = index / 5;
+			const auto col = index % 5;
 			return bingo_row(row) || bingo_col(col);
 		}
 
 		int sum_unmarked() const
 		{
-			return accumulate(
-				places
-					| std::views::filter([](auto&& p) { return !p.marked; })
-					| std::views::transform([](auto&& p) { return p.number.n; }),
-				0);
+			auto sum = 0;
+			for (auto i = 0; i < std::ssize(places); ++i)
+				if (!marked.test(i))
+					sum += places[i].n;
+			return sum;
 		}
 
 		friend std::istream& operator>>(std::istream& is, Board& board)
@@ -73,7 +74,7 @@ namespace {
 			{
 				int n;
 				is >> n;
-				board.places[i] = Board::Place{static_cast<Number>(n)};
+				board.places[i] = Number{static_cast<std::int8_t>(n)};
 			}
 			return is;
 		}
@@ -81,21 +82,17 @@ namespace {
 	private:
 		bool bingo_row(int row) const
 		{
-			for (auto c = 0; c < 5; ++c)
-				if (!places[5*row+c].marked)
-					return false;
-			return true;
+			constexpr auto single_row = 0b11111;
+			return ((marked >> (5*row)).to_ulong() & single_row) == single_row;
 		}
 		bool bingo_col(int col) const
 		{
-			for (auto r = 0; r < 5; ++r)
-				if (!places[5*r+col].marked)
-					return false;
-			return true;
+			constexpr auto single_col = 0b00001'00001'00001'00001'00001;
+			return ((marked >> col).to_ulong() & single_col) == single_col;
 		}
 
-		struct Place { Number number; bool marked=false; };
-		std::array<Place, 25> places;
+		std::array<Number, 25> places;
+		std::bitset<25> marked;
 	};
 
 
@@ -123,7 +120,33 @@ int q04a(std::istream& is)
 	{
 		for (auto& board: boards)
 			if (board.stripe(number))
+				// first board that wins, return score
 				return number.n * board.sum_unmarked();
+	}
+	return -1;
+}
+
+
+int q04b(std::istream& is)
+{
+	const auto numbers = read_numbers(is);
+	std::vector<Board> boards;
+	std::ranges::move(std::ranges::istream_view<Board>(is), std::back_inserter(boards));
+	for (auto number: numbers)
+	{
+		for (auto it = boards.begin(); it != boards.end();)
+		{
+			if (it->stripe(number))
+			{
+				if (boards.size() == 1)
+					// last board that wins, return score
+					return number.n * it->sum_unmarked();
+				else
+					it = boards.erase(it);
+			}
+			else
+				++it;
+		}
 	}
 	return -1;
 }
