@@ -9,6 +9,7 @@ file(GLOB inputs ${CMAKE_CURRENT_SOURCE_DIR}/input/*)
 add_executable(AoC2021
     ${QS}
     ${inputs}
+    answers
     main.cc
     test_runner.h
 )
