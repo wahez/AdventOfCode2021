@@ -12,51 +12,49 @@ namespace {
 	auto accumulate(std::ranges::input_range auto&& range, auto init, Op&& op = Op{})
 	{
 		std::ranges::for_each(
-			range,
-			[&](const auto& element)
-			{
-				init = std::move(init) + element;
-			});
+					range,
+					[&](const auto& element)
+		{
+			init = std::move(init) + element;
+		});
 		return init;
 	}
 
 
-	struct Population
+	template<typename T, int size>
+	struct RotatableArray
 	{
-		void add_fish(int timer)
-		{
-			++population_by_timer[timer];
-		}
+		T& operator[](int i) { return data[index(i)]; }
 
-		void evolve()
-		{
-			// population moves one timer value down
-			// all fish that were at timer 0 move to 6
-			// and spawn new fish at 8
-			std::ranges::rotate(population_by_timer, population_by_timer.begin() + 1);
-			population_by_timer[6] += population_by_timer[8];
-		}
+		void rotate() { start_index = index(1); }
 
-		auto population() const
-		{
-			return accumulate(population_by_timer, 0);
-		}
+		auto sum() const { return accumulate(data, T{0}); }
 
 	private:
-		std::array<int, 9> population_by_timer;
+		int index(int i) const { i += start_index; return (i < size) ? i : i - size; }
+		std::array<T, size> data{};
+		int start_index{0}; // points to data at index 0
 	};
 
 
-	template<typename T>
-	T from_chars(auto&& range)
+	template<typename T, int size>
+	auto read_fish(std::istream& is, RotatableArray<T, size>& population)
 	{
-		auto value = T{};
-		const auto first = &*range.begin();
-		const auto last = first + std::ranges::distance(range);
-		const auto result = std::from_chars(first, last, value);
-		if (result.ptr != last)
-			throw std::runtime_error("Could not parse");
-		return value;
+		auto timer = 0;
+		for (;;)
+		{
+			is >> timer;
+			++population[timer];
+			switch (is.get())
+			{
+			case '\n':
+				return;
+			case ',':
+				break;
+			default:
+				throw std::runtime_error("Could not parse population");
+			}
+		}
 	}
 
 
@@ -65,17 +63,25 @@ namespace {
 
 int q06a(std::istream& is)
 {
-	auto population = Population{};
-	auto line = std::string{};
-	std::getline(is, line, '\n');
-	std::ranges::for_each(
-		line | std::views::split(','),
-		[&](auto&& r)
-		{
-			const auto timer = from_chars<int>(r);
-			population.add_fish(timer);
-		});
+	auto population = RotatableArray<std::int64_t, 9>{};
+	read_fish(is, population);
 	for (auto i = 0; i < 80; ++i)
-		population.evolve();
-	return population.population();
+	{
+		population.rotate();
+		population[6] += population[8];
+	}
+	return population.sum();
+}
+
+
+std::int64_t q06b(std::istream& is)
+{
+	auto population = RotatableArray<std::int64_t, 9>{};
+	read_fish(is, population);
+	for (auto i = 0; i < 256; ++i)
+	{
+		population.rotate();
+		population[6] += population[8];
+	}
+	return population.sum();
 }
