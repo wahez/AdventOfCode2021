@@ -1,101 +1,83 @@
+#include <array>
 #include <algorithm>
 #include <istream>
 #include <ranges>
 #include <vector>
+#include <cassert>
 #include "util.h"
 
 
 namespace {
 
 
-	struct Pos
-	{
-		int x;
-		int y;
-
-		Pos operator+(const Pos& rhs) const { return Pos{x+rhs.x, y+rhs.y}; }
-		auto operator<=>(const Pos&) const = default;
-	};
-
-
 	struct HeightMap
 	{
-		HeightMap(std::vector<int> heights, int num_lines) :
-			height(std::move(heights)),
-			maxx(height.size() / num_lines)
-		{}
+		using Height = std::int8_t;
+		using Pos = int;
 
-		int operator[](const Pos& pos) const
+		Height operator[](const Pos& pos) const { return height[pos]; }
+
+		Pos get_top_left() const { return line_size+1; }
+		Pos get_bottom_right() const { return height.size() - line_size - 1; }
+
+		int fill_basin(Pos pos)
 		{
-			return height.at(pos.x + pos.y * maxx);
+			if (height[pos] == 9)
+				return 0;
+			else
+			{
+				height[pos] = 9;
+				return 1 +
+					fill_basin(pos+1) +
+					fill_basin(pos-1) +
+					fill_basin(pos+line_size) +
+					fill_basin(pos-line_size);
+			}
 		}
 
-		int max_x() const { return maxx; }
-		int max_y() const { return height.size() / maxx; }
+		bool is_lower_than_neighbours(const Pos& pos) const
+		{
+			auto lower = [&](auto p) { return (*this)[pos] < (*this)[p]; };
+			return lower(pos+1) &&
+			       lower(pos-1) &&
+			       lower(pos+line_size) &&
+			       lower(pos-line_size);
+		};
+
+		static HeightMap read(std::istream& is)
+		{
+			std::noskipws(is);
+			auto map = HeightMap{};
+			auto lines = 0;
+			for (; is.good(); ++lines)
+			{
+				map.height.push_back(9);
+				auto line_view = std::ranges::istream_view<char>(is) | std::views::take_while([](char c) { return c != '\n'; });
+				for (const char c: line_view)
+				{
+					const auto height = c - '0';
+					if (height < 0 || height > 9)
+						throw std::runtime_error("Invalid height");
+					map.height.push_back(height);
+				}
+				map.height.push_back(9);
+			}
+			--lines;
+			map.height.erase(map.height.end()-2, map.height.end());
+			if (map.height.size() % lines != 0)
+				throw std::runtime_error("lines have uneven length");
+			map.line_size = map.height.size() / lines;
+			map.height.insert(map.height.begin(), map.line_size, 9);
+			map.height.insert(map.height.end(), map.line_size, 9);
+			return map;
+		}
+
+		int risk_level(Pos pos) const { return height[pos] + 1; }
 
 	private:
-		std::vector<int> height;
-		int maxx;
+		std::vector<Height> height;
+		int line_size;
 	};
-
-
-	HeightMap read_map(std::istream& is)
-	{
-		auto numbers = std::vector<int>{};
-		auto lines = 0;
-		for (auto c = is.get(); is.good(); c = is.get())
-		{
-			if (c == '\n')
-				++lines;
-			else
-				numbers.push_back(c - '0');
-		}
-		if (numbers.size() % lines != 0)
-			throw std::runtime_error("lines have uneven length");
-		return HeightMap(numbers, lines);
-	}
-
-
-	auto find_low_points(const HeightMap& map)
-	{
-		static constexpr auto xu = Pos{ 1,  0};
-		static constexpr auto xd = Pos{-1,  0};
-		static constexpr auto yd = Pos{ 0, -1};
-		static constexpr auto yu = Pos{ 0,  1};
-		auto lowest_points = std::vector<Pos>{};
-		auto is_lowest = [&](const auto& pos, const auto&... neighbours)
-		{
-			return ((map[pos] < map[pos+neighbours]) && ... && true);
-		};
-		auto pos = Pos{0, 0};
-		if (is_lowest(pos, xu, yu))
-			lowest_points.push_back(pos);
-		for (pos.x = 1; pos.x < map.max_x()-1; ++pos.x)
-			if (is_lowest(pos, xu, xd, yu))
-				lowest_points.push_back(pos);
-		if (is_lowest(pos, xd, yu))
-			lowest_points.push_back(pos);
-		for (pos.y = 1; pos.y < map.max_y()-1; ++pos.y)
-		{
-			pos.x = 0;
-			if (is_lowest(pos, xu, yu, yd))
-				lowest_points.push_back(pos);
-			for (pos.x = 1; pos.x < map.max_x()-1; ++pos.x)
-				if (is_lowest(pos, xu, xd, yu, yd))
-					lowest_points.push_back(pos);
-			if (is_lowest(pos, xd, yu, yd))
-				lowest_points.push_back(pos);
-		}
-		pos.x = 0;
-		if (is_lowest(pos, xu, yd))
-			lowest_points.push_back(pos);
-		for (pos.x = 1; pos.x < map.max_x()-1; ++pos.x)
-			if (is_lowest(pos, xu, xd, yd))
-				lowest_points.push_back(pos);
-		if (is_lowest(pos, xd, yd))
-			lowest_points.push_back(pos);
-		return lowest_points;
-	}
 
 
 }
@@ -103,7 +85,26 @@ namespace {
 
 int q09a(std::istream& is)
 {
-	const auto map = read_map(is);
-	const auto low_points = find_low_points(map);
-	return accumulate(low_points | std::views::transform([&](auto&& p) { return map[p] + 1; }), 0);
+	const auto map = HeightMap::read(is);
+	auto low_points = std::vector<HeightMap::Pos>{};
+	for (auto pos = map.get_top_left(); pos < map.get_bottom_right(); ++pos)
+		if (map.is_lower_than_neighbours(pos))
+			low_points.push_back(pos);
+	return accumulate(low_points | std::views::transform([&](auto&& p) { return map.risk_level(p); }), 0);
+}
+
+
+int q09b(std::istream& is)
+{
+	auto map = HeightMap::read(is);
+	std::vector<int> basins;
+	for (auto pos = map.get_top_left(); pos < map.get_bottom_right(); ++pos)
+	{
+		const auto num_filled = map.fill_basin(pos);
+		if (num_filled > 0)
+			basins.push_back(num_filled);
+	}
+	std::ranges::sort(basins, std::greater<>{});
+	assert(basins.size() > 2);
+	return basins.at(0) * basins.at(1) * basins.at(2);
 }
