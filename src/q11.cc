@@ -81,3 +81,13 @@ int q11a(std::istream& is)
 		flashes += grid.evolve();
 	return flashes;
 }
+
+
+int q11b(std::istream& is)
+{
+	auto grid = Grid{};
+	is >> grid;
+	for (auto i = 1; ; ++i)
+		if (grid.evolve() == 100)
+			return i;
+}
