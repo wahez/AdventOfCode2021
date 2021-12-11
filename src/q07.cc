@@ -1,24 +1,11 @@
 #include <algorithm>
-#include <charconv>
 #include <istream>
 #include <ranges>
 #include <vector>
+#include "util.h"
 
 
 namespace {
-
-
-	template<typename T>
-	T from_chars(auto&& range)
-	{
-		auto value = T{};
-		const auto first = &*range.begin();
-		const auto last = first + std::ranges::distance(range);
-		const auto result = std::from_chars(first, last, value);
-		if (result.ptr != last)
-			throw std::runtime_error("Could not parse");
-		return value;
-	}
 
 
 	template<typename T>
@@ -33,19 +20,6 @@ namespace {
 				| std::views::transform([](auto&& r) { return from_chars<T>(r); }),
 			std::back_inserter(numbers));
 		return numbers;
-	}
-
-
-	template<typename Op = std::plus<>>
-	auto accumulate(std::ranges::input_range auto&& range, auto init, Op&& op = Op{})
-	{
-		std::ranges::for_each(
-					range,
-					[&](const auto& element)
-		{
-			init = std::move(init) + element;
-		});
-		return init;
 	}
 
 

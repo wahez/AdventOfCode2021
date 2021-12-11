@@ -1,24 +1,11 @@
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <istream>
 #include <ranges>
+#include "util.h"
 
 
 namespace {
-
-
-	template<typename Op = std::plus<>>
-	auto accumulate(std::ranges::input_range auto&& range, auto init, Op&& op = Op{})
-	{
-		std::ranges::for_each(
-					range,
-					[&](const auto& element)
-		{
-			init = std::move(init) + element;
-		});
-		return init;
-	}
 
 
 	template<typename T, int size>

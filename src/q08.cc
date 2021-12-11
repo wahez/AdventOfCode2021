@@ -5,6 +5,7 @@
 #include <ranges>
 #include <string>
 #include <cassert>
+#include "util.h"
 
 
 namespace {
@@ -18,19 +19,6 @@ namespace {
 		for (auto next = is.peek(); next >= 'a' && next <= 'g'; is.get(), next = is.peek())
 			segments.set(next - 'a');
 		return segments;
-	}
-
-
-	template<typename Op = std::plus<>>
-	auto accumulate(std::ranges::input_range auto&& range, auto init, Op&& op = Op{})
-	{
-		std::ranges::for_each(
-					range,
-					[&](const auto& element)
-		{
-			init = std::move(init) + element;
-		});
-		return init;
 	}
 
 

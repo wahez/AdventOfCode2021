@@ -1,11 +1,11 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
-#include <charconv>
 #include <istream>
 #include <ranges>
 #include <vector>
 #include <cassert>
+#include "util.h"
 
 
 namespace {
@@ -17,19 +17,6 @@ namespace {
 
 		constexpr auto operator<=>(const Number&) const = default;
 	};
-
-
-	template<typename T>
-	T from_chars(auto&& range)
-	{
-		auto value = T{};
-		const auto first = &*range.begin();
-		const auto last = first + std::ranges::distance(range);
-		const auto result = std::from_chars(first, last, value);
-		if (result.ptr != last)
-			throw std::runtime_error("Could not parse");
-		return value;
-	}
 
 
 	struct Board

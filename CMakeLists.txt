@@ -12,4 +12,5 @@ add_executable(AoC2021
     answers
     main.cc
     test_runner.h
+    src/util.h
 )
