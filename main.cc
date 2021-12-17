@@ -33,6 +33,8 @@ int q14a(std::istream&);
 std::int64_t q14b(std::istream&);
 int q15a(std::istream&);
 int q15b(std::istream&);
+int q16a(std::istream&);
+int q16b(std::istream&);
 
 
 int main(int argc, char** argv)
@@ -108,6 +110,9 @@ int main(int argc, char** argv)
 	run(q15a, "15a", "q15.inp");
 	run(q15b, "15b", "q15.tst", 315);
 	run(q15b, "15b", "q15.inp");
+	run(q16a, "16a", "q16.tst", 82);
+	run(q16a, "16a", "q16.inp");
+	run(q16b, "16b", "q16.tst", 82);
 	const auto end = std::chrono::steady_clock::now();
 	using namespace std::literals;
 	std::cout << "Total : " << (end - start)/1ms << " ms" << std::endl;
