@@ -22,7 +22,7 @@ public:
 			auto answer = std::string{};
 			answers_file >> name >> answer;
 			if (answers_file.good())
-				answers.emplace(name, std::stoll(answer));
+				answers.emplace(name, answer);
 		}
 		for (int i = 1; i < argc; ++i)
 			tests_to_run.insert(argv[i]);
@@ -32,7 +32,13 @@ public:
 	{
 		const auto it = answers.find(name);
 		if (it != answers.end())
-			(*this)(func, name, path, it->second);
+		{
+			using ReturnType = decltype(func(std::cin));
+			if constexpr (std::is_integral_v<ReturnType>)
+				(*this)(func, name, path, std::stoll(it->second));
+			else// if constexpr (std::is_convertible_v<ReturnType, std::string>)
+				(*this)(func, name, path, it->second);
+		}
 		else
 		{
 			if (!tests_to_run.empty() && !tests_to_run.contains(name))
@@ -71,5 +77,5 @@ private:
 		return result;
 	}
 	std::set<std::string, std::less<>> tests_to_run;
-	std::map<std::string, std::int64_t, std::less<>> answers;
+	std::map<std::string, std::string, std::less<>> answers;
 };

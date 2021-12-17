@@ -29,14 +29,16 @@ namespace {
 	{
 		bool stripe(Number number)
 		{
-			const auto place = std::ranges::find(places, number);
-			if (place == places.end())
+			if (const auto place = std::ranges::find(places, number); place == places.end())
 				return false;
-			const auto index = std::distance(places.begin(), place);
-			marked.set(index);
-			const auto row = index / 5;
-			const auto col = index % 5;
-			return bingo_row(row) || bingo_col(col);
+			else
+			{
+				const auto index = std::distance(places.begin(), place);
+				marked.set(index);
+				const auto row = index / 5;
+				const auto col = index % 5;
+				return bingo_row(row) || bingo_col(col);
+			}
 		}
 
 		int sum_unmarked() const
