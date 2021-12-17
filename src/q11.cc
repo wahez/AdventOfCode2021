@@ -3,6 +3,7 @@
 #include <iostream>
 #include <ranges>
 #include <cassert>
+#include "util.h"
 
 
 namespace
@@ -40,8 +41,7 @@ namespace
 			{
 				for (auto col = 1u; col < grid.rows[0].size()-1; ++col)
 					grid.rows[row][col] = is.get()-'0';
-				if (is.get() != '\n')
-					throw std::runtime_error("Expected newline");
+				is >> Assert('\n');
 			}
 			return is;
 		}

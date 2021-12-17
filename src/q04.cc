@@ -18,6 +18,12 @@ namespace {
 		constexpr auto operator<=>(const Number&) const = default;
 	};
 
+	std::istream& operator>>(std::istream& is, Number& number)
+	{
+		is >> NotChar(number.n);
+		return is;
+	}
+
 
 	struct Board
 	{
@@ -45,11 +51,7 @@ namespace {
 		friend std::istream& operator>>(std::istream& is, Board& board)
 		{
 			for (auto i = 0; i < std::ssize(board.places); ++i)
-			{
-				int n;
-				is >> n;
-				board.places[i] = Number{static_cast<std::int8_t>(n)};
-			}
+				is >> NotChar(board.places[i].n);
 			return is;
 		}
 
@@ -70,28 +72,13 @@ namespace {
 	};
 
 
-	auto read_numbers(std::istream& is)
-	{
-		std::vector<Number> numbers;
-		auto first_line = std::string{};
-		std::getline(is, first_line, '\n');
-		std::ranges::move(
-			first_line
-				| std::views::split(',')
-				| std::views::transform([](auto&& r) { return Number{from_chars<std::int8_t>(r)}; }),
-			std::back_inserter(numbers));
-		return numbers;
-	}
-
-
 }
 
 
 int q04a(std::istream& is)
 {
-	const auto numbers = read_numbers(is);
-	std::vector<Board> boards;
-	std::ranges::move(std::ranges::istream_view<Board>(is), std::back_inserter(boards));
+	const auto numbers = read_separated<std::vector<Number>>(is);
+	auto boards = read_non_separated<std::vector<Board>>(is);
 	for (auto number: numbers)
 	{
 		for (auto& board: boards)
@@ -105,9 +92,8 @@ int q04a(std::istream& is)
 
 int q04b(std::istream& is)
 {
-	const auto numbers = read_numbers(is);
-	std::vector<Board> boards;
-	std::ranges::move(std::ranges::istream_view<Board>(is), std::back_inserter(boards));
+	const auto numbers = read_separated<std::vector<Number>>(is);
+	auto boards = read_non_separated<std::vector<Board>>(is);
 	for (auto number: numbers)
 	{
 		for (auto it = boards.begin(); it != boards.end();)

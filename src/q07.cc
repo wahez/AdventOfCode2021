@@ -5,30 +5,9 @@
 #include "util.h"
 
 
-namespace {
-
-
-	template<typename T>
-	auto read_vector(std::istream& is)
-	{
-		std::vector<T> numbers;
-		auto first_line = std::string{};
-		std::getline(is, first_line, '\n');
-		std::ranges::move(
-			first_line
-				| std::views::split(',')
-				| std::views::transform([](auto&& r) { return from_chars<T>(r); }),
-			std::back_inserter(numbers));
-		return numbers;
-	}
-
-
-}
-
-
 int q07a(std::istream& is)
 {
-	auto positions = read_vector<int>(is);
+	auto positions = read_separated<std::vector<int>>(is);
 	std::ranges::nth_element(positions, positions.begin() + positions.size()/2);
 	const auto position = positions[positions.size()/2];
 	auto fuel_cost = [&](auto&& pos)
@@ -44,7 +23,7 @@ int q07a(std::istream& is)
 
 int q07b(std::istream& is)
 {
-	auto positions = read_vector<int>(is);
+	auto positions = read_separated<std::vector<int>>(is);
 	auto total_fuel_cost = [&positions](const auto& pos)
 	{
 		auto fuel_cost = [&pos](const auto& p)

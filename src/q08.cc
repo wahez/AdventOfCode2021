@@ -45,11 +45,9 @@ namespace {
 		for (auto& wiring: display.scrambled_wires_for_digits)
 		{
 			wiring = read_segments(is);
-			if (is.get() != ' ' && is.good())
-				throw std::runtime_error("Expected ' ' in wiring");
+			is >> Assert(' ');
 		}
-		if ((is.get() != '|' || is.get() != ' ') && is.good())
-			throw std::runtime_error("Expected '| '");
+		is >> Assert("| ");
 		for (auto& digits: display.displayed_digits)
 		{
 			digits = read_segments(is);

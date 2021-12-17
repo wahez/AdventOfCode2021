@@ -2,6 +2,7 @@
 #include <istream>
 #include <ranges>
 #include <vector>
+#include "util.h"
 
 
 namespace {
@@ -22,10 +23,7 @@ namespace {
 
 	std::istream& operator>>(std::istream& is, Point& point)
 	{
-		is >> point.x;
-		if (is.get() != ',' && is.good())
-			throw std::runtime_error("Could not parse point");
-		is >> point.y;
+		is >> point.x >> Assert{','} >> point.y;
 		return is;
 	}
 
@@ -49,11 +47,7 @@ namespace {
 
 	std::istream& operator>>(std::istream& is, Line& line)
 	{
-		is >> line.start;
-		if (is.good())
-			if (is.get() != ' ' || is.get() != '-' || is.get() != '>')
-				throw std::runtime_error("Could not parse line");
-		is >> line.end;
+		is >> line.start >> Assert(" ->") >> line.end;
 		return is;
 	}
 

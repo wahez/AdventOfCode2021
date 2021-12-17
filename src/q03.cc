@@ -2,11 +2,11 @@
 #include <bitset>
 #include <istream>
 #include <ranges>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 #include <cassert>
+#include "util.h"
 
 
 namespace {
@@ -25,8 +25,7 @@ namespace {
 		if (s.size() > bitset.bits.size())
 			throw std::runtime_error("Too many bits");
 		bitset.num_bits = s.size();
-		std::stringstream ss(s);
-		ss >> bitset.bits;
+		bitset.bits = std::bitset<31>(s);
 		return is;
 	}
 
@@ -81,8 +80,7 @@ namespace {
 
 int q03a(std::istream& is)
 {
-	std::vector<Bitset> inputs;
-	std::ranges::move(std::ranges::istream_view<Bitset>(is), std::back_inserter(inputs));
+	auto inputs = read_non_separated<std::vector<Bitset>>(is);
 	const auto gamma = find_most_common_bits(inputs);
 	const auto epsilon = (1 << inputs[0].num_bits) - 1 - gamma;
 	return gamma * epsilon;
@@ -91,8 +89,7 @@ int q03a(std::istream& is)
 
 int q03b(std::istream& is)
 {
-	std::vector<Bitset> inputs;
-	std::ranges::move(std::ranges::istream_view<Bitset>(is), std::back_inserter(inputs));
+	auto inputs = read_non_separated<std::vector<Bitset>>(is);
 	const auto oxygen_generator_rating = find_best_match(inputs, true).bits.to_ulong();
 	const auto co2_scrubber_rating = find_best_match(inputs, false).bits.to_ulong();
 	return oxygen_generator_rating * co2_scrubber_rating;

@@ -2,6 +2,7 @@
 #include <istream>
 #include <ranges>
 #include <vector>
+#include "util.h"
 
 
 namespace
@@ -44,10 +45,7 @@ int q01a(std::istream& is)
 
 int q01b(std::istream& is)
 {
-	auto numbers = std::vector<int>{};
-	std::ranges::move(
-			std::ranges::istream_view<int>(is),
-			std::back_inserter(numbers));
+	auto numbers = read_non_separated<std::vector<int>>(is);
 	if (numbers.size() < 4)
 		throw std::runtime_error("Not enough values");
 	// only check if the number added to the sliding window is bigger than the number
