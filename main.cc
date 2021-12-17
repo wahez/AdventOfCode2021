@@ -25,6 +25,7 @@ int q10a(std::istream&);
 std::int64_t q10b(std::istream&);
 int q11a(std::istream&);
 int q11b(std::istream&);
+int q12a(std::istream&);
 
 
 int main(int argc, char** argv)
@@ -75,6 +76,10 @@ int main(int argc, char** argv)
 	run(q11a, "11a", "q11.inp");
 	run(q11b, "11b", "q11.tst", 195);
 	run(q11b, "11b", "q11.inp");
+	run(q12a, "12a", "q12.tst1", 10);
+	run(q12a, "12a", "q12.tst2", 19);
+	run(q12a, "12a", "q12.tst3", 226);
+	run(q12a, "12a", "q12.inp");
 	const auto end = std::chrono::steady_clock::now();
 	using namespace std::literals;
 	std::cout << "Total : " << (end - start)/1ms << " ms" << std::endl;
