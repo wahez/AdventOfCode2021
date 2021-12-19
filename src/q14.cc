@@ -40,43 +40,72 @@ namespace
 
 	struct Polymer
 	{
+		explicit Polymer(const std::string& polymer) :
+			first(polymer.front()),
+			last(polymer.back())
+		{
+			for (auto i = 0u; i < polymer.size()-1; ++i)
+				++pairs[{polymer[i], polymer[i+1]}];
+		}
+
 		void grow(const Rules& rules)
 		{
-			auto result = std::string(2*polymer.size()-1, '0');
-			for (auto i = 0u; i < polymer.size()-1; ++i)
+			auto result = decltype(pairs){};
+			for (const auto& [pair, count]: pairs)
 			{
-				result[2*i] = polymer[i];
-				result[2*i+1] = rules(polymer[i], polymer[i+1]);
+				const auto middle = rules(pair[0], pair[1]);
+				result[{pair[0], middle}] += count;
+				result[{middle, pair[1]}] += count;
 			}
-			result.back() = polymer.back();
-			std::swap(polymer, result);
+			std::swap(result, pairs);
 		}
+
 		auto count_occurrences() const
 		{
 			auto result = std::map<char, std::int64_t>{};
-			for (const char c: polymer)
-				++result[c];
+			for (const auto& [pair, count]: pairs)
+			{
+				result[pair[0]] += count;
+				result[pair[1]] += count;
+			}
+			// all letters are in two pairs except the ends
+			++result[first];
+			++result[last];
+			// divide by two
+			for (auto& [c, count]: result)
+				count /= 2;
 			return result;
 		}
-
-		std::string polymer;
+	private:
+		std::map<std::array<char, 2>, std::int64_t> pairs;
+		const char first;
+		const char last;
 	};
-
-	std::istream& operator>>(std::istream& is, Polymer& polymer)
-	{
-		std::getline(is, polymer.polymer);
-		return is;
-	}
 
 }
 
 
 int q14a(std::istream& is)
 {
-	auto polymer = Polymer{};
+	auto polymer_input = std::string{};
 	auto rules = Rules{};
-	is >> polymer >> Assert('\n') >> rules;
+	is >> polymer_input >> Assert("\n\n") >> rules;
+	auto polymer = Polymer{std::move(polymer_input)};
 	for (auto i = 0; i < 10; ++i)
+		polymer.grow(rules);
+	auto occurrences = polymer.count_occurrences();
+	const auto& [min, max] = std::ranges::minmax_element(occurrences, std::ranges::less{}, &decltype(occurrences)::value_type::second);
+	return max->second - min->second;
+}
+
+
+std::int64_t q14b(std::istream& is)
+{
+	auto polymer_input = std::string{};
+	auto rules = Rules{};
+	is >> polymer_input >> Assert("\n\n") >> rules;
+	auto polymer = Polymer{std::move(polymer_input)};
+	for (auto i = 0; i < 40; ++i)
 		polymer.grow(rules);
 	auto occurrences = polymer.count_occurrences();
 	const auto& [min, max] = std::ranges::minmax_element(occurrences, std::ranges::less{}, &decltype(occurrences)::value_type::second);

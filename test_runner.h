@@ -42,10 +42,7 @@ public:
 		else
 		{
 			if (!tests_to_run.empty() && !tests_to_run.contains(name))
-			{
-				std::cout << "Test " << name << " skipped" << std::endl;
 				return;
-			}
 			const auto result = run(func, name, path);
 			std::cout << "Test " << name << " produced " << result << std::endl;
 		}
@@ -54,10 +51,7 @@ public:
 	void operator()(auto&& func, std::string_view name, const std::filesystem::path& path, const auto& expected_output) const
 	{
 		if (!tests_to_run.empty() && !tests_to_run.contains(name))
-		{
-			std::cout << "Test " << name << " skipped" << std::endl;
 			return;
-		}
 		const auto result = run(func, name, path);
 		if (result != expected_output)
 				std::cerr << "Test " << name << " failed with input (" << path << "), expected: " << expected_output << ", got: " << result << std::endl;
