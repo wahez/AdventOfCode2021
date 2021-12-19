@@ -20,8 +20,7 @@ namespace {
 
 	std::istream& operator>>(std::istream& is, Bitset& bitset)
 	{
-		std::string s;
-		is >> s;
+		const auto s = read<std::string>(is);
 		if (s.size() > bitset.bits.size())
 			throw std::runtime_error("Too many bits");
 		bitset.num_bits = s.size();

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <istream>
 #include <ranges>
+#include "util.h"
 
 
 namespace {
@@ -15,8 +16,7 @@ namespace {
 
 	inline std::istream& operator>>(std::istream& is, Direction& direction)
 	{
-		std::string word;
-		is >> word;
+		const auto word = read<std::string>(is);
 		if (word == "down")
 			direction = Direction::down;
 		else if (word == "forward")

@@ -27,10 +27,9 @@ namespace {
 	template<typename T, int size>
 	auto read_fish(std::istream& is, RotatableArray<T, size>& population)
 	{
-		auto timer = 0;
 		for (;;)
 		{
-			is >> timer;
+			const auto timer = read<int>(is);
 			++population[timer];
 			switch (is.get())
 			{

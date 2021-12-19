@@ -74,8 +74,7 @@ namespace
 
 int q11a(std::istream& is)
 {
-	auto grid = Grid{};
-	is >> grid;
+	auto grid = read<Grid>(is);
 	auto flashes = 0;
 	for (auto i = 0; i < 100; ++i)
 		flashes += grid.evolve();
@@ -85,8 +84,7 @@ int q11a(std::istream& is)
 
 int q11b(std::istream& is)
 {
-	auto grid = Grid{};
-	is >> grid;
+	auto grid = read<Grid>(is);
 	for (auto i = 1; ; ++i)
 		if (grid.evolve() == 100)
 			return i;

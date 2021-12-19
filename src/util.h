@@ -13,10 +13,14 @@ auto accumulate(std::ranges::input_range auto&& range, auto init, Op&& op = Op{}
 				range,
 				[&](const auto& element)
 	{
-		init = std::move(init) + element;
+		init = op(std::move(init), element);
 	});
 	return init;
 }
+
+
+template<typename T>
+T read(std::istream& is) { auto result = T{}; is >> result; return result; }
 
 
 template<typename T>
@@ -28,8 +32,7 @@ struct Assert
 template<typename T>
 std::istream& operator>>(std::istream& is, const Assert<T>& a)
 {
-	const auto found = T{};
-	is >> found;
+	const auto found = read<T>(is);
 	if (found != a.expected && is.good())
 	{
 		std::ostringstream os;
@@ -79,8 +82,7 @@ struct NotChar
 template<typename T>
 inline std::istream& operator>>(std::istream& is, const NotChar<T>& a)
 {
-	auto value = std::int64_t{};
-	is >> value;
+	const auto value = read<std::int64_t>(is);
 	a.target = static_cast<T>(value);
 	return is;
 }
@@ -99,11 +101,10 @@ auto read_separated(std::istream& is, const char separator = ',', const char end
 	Container result;
 	while (true)
 	{
-		auto value = typename Container::value_type{};
-		is >> value;
+		auto value = read<typename Container::value_type>(is);
 		if (!is.good())
 			break;
-		result.push_back(value);
+		result.push_back(std::move(value));
 		const auto next = is.get();
 		if (next == end)
 			break;
