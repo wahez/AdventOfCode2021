@@ -4,11 +4,15 @@
 #include <optional>
 #include <ranges>
 #include <variant>
+#include <vector>
 #include "util.h"
 
 
 namespace
 {
+
+
+	template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
 
 	struct ExplodeResult
@@ -22,8 +26,21 @@ namespace
 
 	struct SnailNumber
 	{
-		std::variant<int, std::unique_ptr<SnailNumber>> left;
-		std::variant<int, std::unique_ptr<SnailNumber>> right;
+		using NodeType = std::variant<int, std::unique_ptr<SnailNumber>>;
+		NodeType left;
+		NodeType right;
+
+		SnailNumber copy() const
+		{
+			auto copy_node = overload{
+				[](int n) -> NodeType { return n; },
+				[](const auto& n) -> NodeType { return std::make_unique<SnailNumber>(n->copy()); },
+			};
+			auto sn = SnailNumber{};
+			sn.left = std::visit(copy_node, left);
+			sn.right = std::visit(copy_node, right);
+			return sn;
+		}
 
 		void reduce()
 		{
@@ -32,30 +49,20 @@ namespace
 
 		int magnitude() const
 		{
-			auto part = [](const auto& n)
-			{
-				if constexpr(std::is_same_v<int, std::decay_t<decltype(n)>>)
-					return n;
-				else
-					return n->magnitude();
+			auto part = overload{
+				[](int n) { return n; },
+				[](const auto& n) { return n->magnitude(); },
 			};
 			return 3*std::visit(part, left) + 2*std::visit(part, right);
 		}
 
 		ExplodeResult explode(int depth)
 		{
-			auto explode_child = [](auto& node, int depth)
-				{
-					return std::visit([depth](auto& n) -> ExplodeResult
-						{
-							if constexpr(std::is_same_v<int, std::decay_t<decltype(n)>>)
-								return {false, {}, {}};
-							else
-								return n->explode(depth+1);
-						},
-						node);
-				};
-			if (auto result = explode_child(left, depth); result)
+			auto explode_child = overload{
+				[depth](int n) -> ExplodeResult { return {false, {}, {}}; },
+				[depth](auto& n) -> ExplodeResult { return n->explode(depth+1); },
+			};
+			if (auto result = std::visit(explode_child, left); result)
 			{
 				if (result.right)
 				{
@@ -66,7 +73,7 @@ namespace
 				result.right = {};
 				return result;
 			}
-			if (auto result = explode_child(right, depth); result)
+			if (auto result = std::visit(explode_child, right); result)
 			{
 				if (result.left)
 				{
@@ -85,47 +92,39 @@ namespace
 		bool split()
 		{
 			auto split_child = [](auto& node)
-				{
-					return std::visit([&](auto& n)
+			{
+				return std::visit(overload{
+						[&](int n)
 						{
-							if constexpr(std::is_same_v<int, std::decay_t<decltype(n)>>)
-							{
-								if (n < 10)
-									return false;
-								else
-								{
-									node = std::make_unique<SnailNumber>(n/2, (n+1)/2);
-									return true;
-								}
-							}
+							if (n < 10)
+								return false;
 							else
-								return n->split();
+							{
+								node = std::make_unique<SnailNumber>(n/2, (n+1)/2);
+								return true;
+							}
 						},
-						node);
-				};
+						[&](auto& n) { return n->split(); },
+					},
+					node);
+			};
 			return split_child(left) || split_child(right);
 		}
 	private:
 		static void add_left(int number, std::variant<int, std::unique_ptr<SnailNumber>>& snail_number)
 		{
-			std::visit([number](auto& node)
-				{
-					if constexpr(std::is_same_v<int, std::decay_t<decltype(node)>>)
-						node += number;
-					else
-						add_left(number, node->left);
+			std::visit(overload{
+					[number](int& node) { node += number; },
+					[number](auto& node) { add_left(number, node->left); },
 				},
 				snail_number);
 		};
 
 		static void add_right(int number, std::variant<int, std::unique_ptr<SnailNumber>>& snail_number)
 		{
-			std::visit([number](auto& node)
-				{
-					if constexpr(std::is_same_v<int, std::decay_t<decltype(node)>>)
-						node += number;
-					else
-						add_right(number, node->right);
+			std::visit(overload{
+					[number](int& node) { node += number; },
+					[number](auto& node) { add_right(number, node->right); },
 				},
 				snail_number);
 		};
@@ -133,12 +132,9 @@ namespace
 
 	std::ostream& operator<<(std::ostream& os, SnailNumber& snail_number)
 	{
-		auto print_sub = [&](const auto& n)
-		{
-			if constexpr(std::is_same_v<int, std::decay_t<decltype(n)>>)
-				os << n;
-			else
-				os << *n;
+		auto print_sub = overload{
+			[&](int n) { os << n; },
+			[&](const auto& n) { os << *n; },
 		};
 		os << '[';
 		std::visit(print_sub, snail_number.left);
@@ -191,4 +187,23 @@ int q18a(std::istream& is)
 			break;
 	}
 	return total.magnitude();
+}
+
+
+int q18b(std::istream& is)
+{
+	auto numbers = std::vector<SnailNumber>{};
+	for (auto& sn: std::ranges::istream_view<SnailNumber>(is))
+	{
+		numbers.push_back(std::move(sn));
+		is >> Assert('\n');
+		if (is.peek() == '\n')
+			break;
+	}
+	auto max = 0;
+	for (auto i1 = 0; i1 < std::ssize(numbers); ++i1)
+		for (auto i2 = 0; i2 < std::ssize(numbers); ++i2)
+			if (i1 != i2)
+				max = std::max(max, (numbers[i1].copy()+numbers[i2].copy()).magnitude());
+	return max;
 }
