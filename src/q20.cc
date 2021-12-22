@@ -38,6 +38,11 @@ namespace
 			background = value;
 		}
 
+		bool get_background() const
+		{
+			return background;
+		}
+
 		auto size_x() const { return line_width; }
 		auto size_y() const { return std::ssize(pixels) / line_width; }
 
@@ -113,7 +118,10 @@ namespace
 		Image enhance(const Image& image) const
 		{
 			auto result = Image{image.size_x()+2, static_cast<int>(image.size_y()+2)};
-			result.set_background(bits[511]);
+			if (image.get_background())
+				result.set_background(bits[0]);
+			else
+				result.set_background(bits[511]);
 			for (auto x = 0; x < result.size_x(); ++x)
 			{
 				for (auto y = 0; y < result.size_y(); ++y)
@@ -140,5 +148,17 @@ int q20a(std::istream& is)
 	auto image = read<Image>(is);
 	image = pixel_enhancer.enhance(image);
 	image = pixel_enhancer.enhance(image);
+	return image.pixels_lit();
+}
+
+
+int q20b(std::istream& is)
+{
+	const auto line = read<std::string>(is);
+	const auto pixel_enhancer = PixelEnhancer{std::bitset<512>(line, 0, 512, '.', '#')};
+	is >> Assert("\n\n");
+	auto image = read<Image>(is);
+	for (auto i = 0; i < 50; ++i)
+		image = pixel_enhancer.enhance(image);
 	return image.pixels_lit();
 }
