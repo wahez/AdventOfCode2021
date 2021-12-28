@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <istream>
+#include <map>
 #include <ranges>
 #include <vector>
 #include "util.h"
@@ -15,8 +16,18 @@ namespace {
 		int z;
 
 		auto operator<=>(const Pos&) const = default;
-	};
 
+		friend std::ostream& operator<<(std::ostream& os, const Pos& pos)
+		{
+			os << pos.x << ',' << pos.y << ',' << pos.z;
+			return os;
+		}
+
+		int manhattan() const
+		{
+			return std::abs(x) + std::abs(y) + std::abs(z);
+		}
+	};
 
 	Pos operator+(const Pos& lhs, const Pos& rhs) { return Pos{lhs.x+rhs.x, lhs.y+rhs.y, lhs.z+rhs.z}; }
 	Pos operator-(const Pos& lhs, const Pos& rhs) { return Pos{lhs.x-rhs.x, lhs.y-rhs.y, lhs.z-rhs.z}; }
@@ -30,67 +41,62 @@ namespace {
 
 	struct Rotation
 	{
-		bool x;
-		bool y;
-		bool z;
-		bool swap_x_y;
-		bool swap_x_z;
-		bool swap_y_z;
+		std::array<std::array<std::int8_t, 3>, 3> m;
 
 		Pos rotate(Pos pos) const
 		{
-			if (x) pos.x = -pos.x;
-			if (y) pos.y = -pos.y;
-			if (z) pos.z = -pos.z;
-			if (swap_x_y) std::tie(pos.x, pos.y) = std::make_tuple(pos.y, pos.x);
-			if (swap_x_z) std::tie(pos.x, pos.z) = std::make_tuple(pos.z, pos.x);
-			if (swap_y_z) std::tie(pos.y, pos.z) = std::make_tuple(pos.z, pos.y);
-			return pos;
+			return Pos{
+				m[0][0] * pos.x + m[0][1] * pos.y + m[0][2] * pos.z,
+				m[1][0] * pos.x + m[1][1] * pos.y + m[1][2] * pos.z,
+				m[2][0] * pos.x + m[2][1] * pos.y + m[2][2] * pos.z};
 		}
 
 		Pos unrotate(Pos pos) const
 		{
-			if (swap_y_z) std::tie(pos.y, pos.z) = std::make_tuple(pos.z, pos.y);
-			if (swap_x_z) std::tie(pos.x, pos.z) = std::make_tuple(pos.z, pos.x);
-			if (swap_x_y) std::tie(pos.x, pos.y) = std::make_tuple(pos.y, pos.x);
-			if (z) pos.z = -pos.z;
-			if (y) pos.y = -pos.y;
-			if (x) pos.x = -pos.x;
-			return pos;
+			return Pos{
+				m[0][0] * pos.x + m[1][0] * pos.y + m[2][0] * pos.z,
+				m[0][1] * pos.x + m[1][1] * pos.y + m[2][1] * pos.z,
+				m[0][2] * pos.x + m[1][2] * pos.y + m[2][2] * pos.z};
 		}
 
+		friend std::ostream& operator<<(std::ostream& os, const Rotation& rot)
+		{
+			for (auto r: rot.m)
+			{
+				for (auto c: r)
+					os << NotChar(c) << " ";
+				os << '\n';
+			}
+			return os;
+		}
 	};
 
+
 	constexpr Rotation all_rotations[] = {
-		{false, false, false, false, false, false},
-		{false,  true,  true, false, false, false},
-		{ true, false,  true, false, false, false},
-		{ true,  true, false, false, false, false},
-
-		{false, false,  true, false, false,  true},
-		{false,  true, false, false, false,  true},
-		{ true, false, false, false, false,  true},
-		{ true,  true,  true, false, false,  true},
-
-		{false, false,  true, false,  true, false},
-		{false,  true, false, false,  true, false},
-		{ true, false, false, false,  true, false},
-		{ true,  true,  true, false,  true, false},
-
-		{false, false,  true,  true, false, false},
-		{false,  true, false,  true, false, false},
-		{ true, false, false,  true, false, false},
-		{ true,  true,  true,  true, false, false},
-
-		{false, false, false, false,  true,  true},
-		{false,  true,  true, false,  true,  true},
-		{ true, false,  true, false,  true,  true},
-		{ true,  true, false, false,  true,  true},
-
-		{false, false, false,  true, false,  true},
-		{false,  true,  true,  true, false,  true},
-		{ true, false,  true,  true, false,  true},
-		{ true,  true, false,  true, false,  true},
+		{{{{{ 1, 0, 0}}, {{ 0, 1, 0}}, {{ 0, 0, 1}}}}},
+		{{{{{ 1, 0, 0}}, {{ 0,-1, 0}}, {{ 0, 0,-1}}}}},
+		{{{{{ 1, 0, 0}}, {{ 0, 0, 1}}, {{ 0,-1, 0}}}}},
+		{{{{{ 1, 0, 0}}, {{ 0, 0,-1}}, {{ 0, 1, 0}}}}},
+		{{{{{-1, 0, 0}}, {{ 0,-1, 0}}, {{ 0, 0, 1}}}}},
+		{{{{{-1, 0, 0}}, {{ 0, 1, 0}}, {{ 0, 0,-1}}}}},
+		{{{{{-1, 0, 0}}, {{ 0, 0,-1}}, {{ 0,-1, 0}}}}},
+		{{{{{-1, 0, 0}}, {{ 0, 0, 1}}, {{ 0, 1, 0}}}}},
+		{{{{{ 0, 1, 0}}, {{-1, 0, 0}}, {{ 0, 0, 1}}}}},
+		{{{{{ 0, 1, 0}}, {{ 1, 0, 0}}, {{ 0, 0,-1}}}}},
+		{{{{{ 0, 1, 0}}, {{ 0, 0,-1}}, {{-1, 0, 0}}}}},
+		{{{{{ 0, 1, 0}}, {{ 0, 0, 1}}, {{ 1, 0, 0}}}}},
+		{{{{{ 0,-1, 0}}, {{ 1, 0, 0}}, {{ 0, 0, 1}}}}},
+		{{{{{ 0,-1, 0}}, {{-1, 0, 0}}, {{ 0, 0,-1}}}}},
+		{{{{{ 0,-1, 0}}, {{ 0, 0, 1}}, {{-1, 0, 0}}}}},
+		{{{{{ 0,-1, 0}}, {{ 0, 0,-1}}, {{ 1, 0, 0}}}}},
+		{{{{{ 0, 0, 1}}, {{-1, 0, 0}}, {{ 0,-1, 0}}}}},
+		{{{{{ 0, 0, 1}}, {{ 1, 0, 0}}, {{ 0, 1, 0}}}}},
+		{{{{{ 0, 0, 1}}, {{ 0,-1, 0}}, {{ 1, 0, 0}}}}},
+		{{{{{ 0, 0, 1}}, {{ 0, 1, 0}}, {{-1, 0, 0}}}}},
+		{{{{{ 0, 0,-1}}, {{ 1, 0, 0}}, {{ 0,-1, 0}}}}},
+		{{{{{ 0, 0,-1}}, {{-1, 0, 0}}, {{ 0, 1, 0}}}}},
+		{{{{{ 0, 0,-1}}, {{ 0, 1, 0}}, {{ 1, 0, 0}}}}},
+		{{{{{ 0, 0,-1}}, {{ 0,-1, 0}}, {{-1, 0, 0}}}}},
 	};
 
 
@@ -134,16 +140,25 @@ namespace {
 
 		std::optional<std::pair<Pos, Rotation>> match(const Beacons& other) const
 		{
-			for (const auto& pos1: positions)
+			std::vector<Pos> translations;
+			for (const auto& rotation: all_rotations)
 			{
-				for (const auto& rotation: all_rotations)
+				translations.resize(0);
+				for (const auto& pos2: other.positions)
 				{
-					for (const auto& pos2: other.positions)
-					{
-						const auto translation = pos1 + rotation.rotate(Pos{0,0,0}-pos2);
-						if (match(other, translation, rotation))
-							return std::make_pair(translation, rotation);
-					}
+					const auto rotated = rotation.rotate(Pos{0,0,0}-pos2);
+					for (const auto& pos1: positions)
+						translations.push_back(pos1+rotated);
+				}
+				std::ranges::sort(translations);
+				auto first = translations.begin();
+				auto last = first;
+				while (last != translations.end())
+				{
+					last = std::find_if(first, translations.end(), [&](const auto& value) { return value != *first; });
+					if (std::distance(first, last) >= 12)
+						return std::make_pair(*first, rotation);
+					first = last;
 				}
 			}
 			return std::nullopt;
@@ -163,32 +178,6 @@ namespace {
 		Pos& emplace_back() { return positions.emplace_back(); }
 
 	private:
-		bool match(const Beacons& other, const Pos& translation, const Rotation& rotation) const
-		{
-			auto count = 0;
-			for (const auto& position: other.positions)
-			{
-				const auto projected = translation+rotation.rotate(position);
-				if (std::ranges::any_of(known_area, [&](const auto& area) { return area[projected]; }))
-				{
-					if (std::ranges::find(positions, projected) == positions.end())
-						return false;
-					else
-						++count;
-				}
-			}
-			for (const auto& position: positions)
-			{
-				const auto projected = rotation.unrotate(position-translation);
-				if (std::ranges::any_of(other.known_area, [&](const auto& area) { return area[projected]; }))
-				{
-					if (std::ranges::find(other.positions, projected) == other.positions.end())
-						return false;
-				}
-			}
-			return count >= 2;
-		}
-
 		std::vector<Box> known_area{{Box{Pos{-1000,-1000,-1000}, Pos{1000,1000,1000}}}};
 		std::vector<Pos> positions;
 	};
@@ -232,4 +221,36 @@ int q19a(std::istream& is)
 		}
 	}
 	return map.size();
+}
+
+
+int q19b(std::istream& is)
+{
+	auto scanners = std::vector<Beacons>{};
+	while (is.good())
+		scanners.push_back(read_scanner(is));
+	auto map = std::move(scanners.front());
+	scanners.erase(scanners.begin());
+	auto positions = std::vector{Pos{0,0,0}};
+	while (!scanners.empty())
+	{
+		for (auto it = scanners.begin(); it != scanners.end();)
+		{
+			if (const auto match_result = map.match(*it); match_result)
+			{
+				positions.push_back(match_result->first);
+				it->rotate_all(match_result->second);
+				it->translate(match_result->first);
+				map.add(std::move(*it));
+				it = scanners.erase(it);
+			}
+			else
+				++it;
+		}
+	}
+	auto max = 0;
+	for (auto i1 = 0; i1 < std::ssize(positions); ++i1)
+		for (auto i2 = 0; i2 < std::ssize(positions); ++i2)
+			max = std::max(max, (positions[i1] - positions[i2]).manhattan());
+	return max;
 }
