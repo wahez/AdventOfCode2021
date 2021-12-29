@@ -1,9 +1,8 @@
+#include <array>
 #include <algorithm>
-#include <iostream>
-#include <memory>
+#include <istream>
 #include <optional>
 #include <ranges>
-#include <variant>
 #include <vector>
 #include "util.h"
 
@@ -12,161 +11,143 @@ namespace
 {
 
 
-	template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
-
-
-	struct ExplodeResult
-	{
-		bool exploded = false;
-		std::optional<int> left;
-		std::optional<int> right;
-
-		explicit operator bool() const { return exploded; }
-	};
-
+	template<int LEVELS>
 	struct SnailNumber
 	{
-		using NodeType = std::variant<int, std::unique_ptr<SnailNumber>>;
-		NodeType left;
-		NodeType right;
-
-		SnailNumber copy() const
+	public:
+		explicit SnailNumber()
 		{
-			auto copy_node = overload{
-				[](int n) -> NodeType { return n; },
-				[](const auto& n) -> NodeType { return std::make_unique<SnailNumber>(n->copy()); },
-			};
-			auto sn = SnailNumber{};
-			sn.left = std::visit(copy_node, left);
-			sn.right = std::visit(copy_node, right);
-			return sn;
-		}
-
-		void reduce()
-		{
-			while (explode(1) || split());
+			numbers.fill(-1);
 		}
 
 		int magnitude() const
 		{
-			auto part = overload{
-				[](int n) { return n; },
-				[](const auto& n) { return n->magnitude(); },
-			};
-			return 3*std::visit(part, left) + 2*std::visit(part, right);
+			auto magnitudes = std::array<int, SIZE>{};
+			std::ranges::copy(numbers, magnitudes.begin());
+			for (auto end = SIZE/2; end > 0; end /= 2)
+				for (auto c = 0; c < end; ++c)
+					if (magnitudes[2*c+1] == -1)
+						magnitudes[c] = magnitudes[2*c];
+					else
+						magnitudes[c] = 3*magnitudes[2*c] + 2*magnitudes[2*c+1];
+			return magnitudes[0];
 		}
 
-		ExplodeResult explode(int depth)
+		const auto& operator[](int i) const { return numbers[i]; }
+		      auto& operator[](int i)       { return numbers[i]; }
+
+		SnailNumber<LEVELS> operator+(const SnailNumber<LEVELS>& rhs) const
 		{
-			auto explode_child = overload{
-				[depth](int n) -> ExplodeResult { return {false, {}, {}}; },
-				[depth](auto& n) -> ExplodeResult { return n->explode(depth+1); },
-			};
-			if (auto result = std::visit(explode_child, left); result)
+			auto snail_number = SnailNumber<LEVELS+1>{};
+			auto copy_result = std::ranges::copy(numbers, snail_number.numbers.begin());
+			std::ranges::copy(rhs.numbers, copy_result.out);
+			do
 			{
-				if (result.right)
-				{
-					if (result.left)
-						left = 0;
-					add_left(*result.right, right);
-				}
-				result.right = {};
-				return result;
+				snail_number.explode();
 			}
-			if (auto result = std::visit(explode_child, right); result)
-			{
-				if (result.left)
+			while (snail_number.split());
+			auto lower_level = SnailNumber<LEVELS>{};
+			for (auto i = 0; i < SIZE; ++i)
+				lower_level[i] = snail_number[2*i];
+			return lower_level;
+		}
+
+	private:
+		static constexpr auto SIZE = 1 << LEVELS;
+		std::array<std::int8_t, SIZE> numbers;
+
+		void explode()
+		{
+			int carry_right = 0;
+			for (auto i = 1; i < SIZE; ++i)
+				if (numbers[i] != -1)
 				{
-					if (result.right)
-						right = 0;
-					add_right(*result.left, left);
+					if (i & 1)
+					{
+						const auto carry_left = std::exchange(numbers[i-1], 0) + carry_right;
+						carry_right = std::exchange(numbers[i], -1);
+						for (auto l = i-3; l >= 0; l -= 2)
+							if (numbers[l] != -1)
+							{
+								numbers[l] += carry_left;
+								break;
+							}
+					}
+					else
+						numbers[i] += std::exchange(carry_right, 0);
 				}
-				result.left = {};
-				return result;
-			}
-			if (depth > 4)
-				return {true, std::get<int>(left), std::get<int>(right)};
-			return {false};
 		}
 
 		bool split()
 		{
-			auto split_child = [](auto& node)
-			{
-				return std::visit(overload{
-						[&](int n)
+			for (auto i = 0; i < std::ssize(numbers); i += 2)
+				if (numbers[i] > 9)
+				{
+					for (auto step = 2; step < (1<<LEVELS); step *= 2)
+						if ((i & step) || numbers[i+step] != -1)
 						{
-							if (n < 10)
-								return false;
-							else
-							{
-								node = std::make_unique<SnailNumber>(n/2, (n+1)/2);
-								return true;
-							}
-						},
-						[&](auto& n) { return n->split(); },
-					},
-					node);
-			};
-			return split_child(left) || split_child(right);
+							numbers[i+step/2] = (numbers[i]+1)/2;
+							numbers[i] = numbers[i]/2;
+							break;
+						}
+					return true;
+				}
+			return false;
 		}
-	private:
-		static void add_left(int number, std::variant<int, std::unique_ptr<SnailNumber>>& snail_number)
-		{
-			std::visit(overload{
-					[number](int& node) { node += number; },
-					[number](auto& node) { add_left(number, node->left); },
-				},
-				snail_number);
-		};
-
-		static void add_right(int number, std::variant<int, std::unique_ptr<SnailNumber>>& snail_number)
-		{
-			std::visit(overload{
-					[number](int& node) { node += number; },
-					[number](auto& node) { add_right(number, node->right); },
-				},
-				snail_number);
-		};
+		template<int L> friend struct SnailNumber;
 	};
 
-	std::ostream& operator<<(std::ostream& os, SnailNumber& snail_number)
+
+	template<int LEVELS>
+	std::ostream& operator<<(std::ostream& os, SnailNumber<LEVELS>& snail_number)
 	{
-		auto print_sub = overload{
-			[&](int n) { os << n; },
-			[&](const auto& n) { os << *n; },
+		auto print_recursive = [&](auto index, auto step, auto&& next) -> void
+		{
+			if (step == 0 || snail_number[index+step] == -1)
+				os << NotChar(snail_number[index]);
+			else
+			{
+				os << '[';
+				next(index, step/2, next);
+				os << ',';
+				next(index+step, step/2, next);
+				os << ']';
+			}
 		};
-		os << '[';
-		std::visit(print_sub, snail_number.left);
-		os << ',';
-		std::visit(print_sub, snail_number.right);
-		os << ']';
+		print_recursive(0, 1<<(LEVELS-1), print_recursive);
 		return os;
 	}
 
-	std::istream& operator>>(std::istream& is, SnailNumber& snail_number)
+	template<int LEVELS>
+	std::istream& operator>>(std::istream& is, SnailNumber<LEVELS>& snail_number)
 	{
-		auto read_part = [&]() -> std::variant<int, std::unique_ptr<SnailNumber>>
-		{
-			if (is.peek() == '[')
-				return std::make_unique<SnailNumber>(read<SnailNumber>(is));
-			else
-				return read<int>(is);
-		};
+		snail_number = SnailNumber<LEVELS>{};
+		auto step = 1<<(LEVELS-1);
+		auto index = 0;
 		is >> Assert('[');
-		snail_number.left = read_part();
-		is >> Assert(',');
-		snail_number.right = read_part();
-		is >> Assert(']');
+		while (is.good() && step < (1<<LEVELS))
+		{
+			const char c = is.peek();
+			if (c == '[')
+			{
+				is.get();
+				step /= 2;
+			}
+			else if (c == ',')
+			{
+				is.get();
+				index += step;
+			}
+			else if (c == ']')
+			{
+				is.get();
+				index -= step;
+				step *= 2;
+			}
+			else
+				snail_number[index] = read<int>(is);
+		}
 		return is;
-	}
-
-
-	SnailNumber operator+(SnailNumber lhs, SnailNumber rhs)
-	{
-		auto snail_number = SnailNumber{std::make_unique<SnailNumber>(std::move(lhs)), std::make_unique<SnailNumber>(std::move(rhs))};
-		snail_number.reduce();
-		return snail_number;
 	}
 
 
@@ -175,7 +156,7 @@ namespace
 
 int q18a(std::istream& is)
 {
-	auto numbers = std::ranges::istream_view<SnailNumber>(is);
+	auto numbers = std::ranges::istream_view<SnailNumber<4>>(is);
 	auto it = numbers.begin();
 	auto total = std::move(*it);
 	is >> Assert('\n');
@@ -192,8 +173,8 @@ int q18a(std::istream& is)
 
 int q18b(std::istream& is)
 {
-	auto numbers = std::vector<SnailNumber>{};
-	for (auto& sn: std::ranges::istream_view<SnailNumber>(is))
+	auto numbers = std::vector<SnailNumber<4>>{};
+	for (auto& sn: std::ranges::istream_view<SnailNumber<4>>(is))
 	{
 		numbers.push_back(std::move(sn));
 		is >> Assert('\n');
@@ -204,6 +185,6 @@ int q18b(std::istream& is)
 	for (auto i1 = 0; i1 < std::ssize(numbers); ++i1)
 		for (auto i2 = 0; i2 < std::ssize(numbers); ++i2)
 			if (i1 != i2)
-				max = std::max(max, (numbers[i1].copy()+numbers[i2].copy()).magnitude());
+				max = std::max(max, (numbers[i1]+numbers[i2]).magnitude());
 	return max;
 }
