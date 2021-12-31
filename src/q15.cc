@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <istream>
 #include <limits>
+#include <queue>
 #include <ranges>
 #include <vector>
 #include <cassert>
@@ -13,8 +14,9 @@ namespace
 
 	struct Pos
 	{
-		int x;
-		int y;
+		explicit Pos(int xn, int yn) : x(xn), y(yn) {}
+		std::int16_t x;
+		std::int16_t y;
 
 		auto operator<=>(const Pos&) const = default;
 		Pos operator+(const Pos& rhs) const { return Pos{x+rhs.x, y+rhs.y}; }
@@ -40,10 +42,12 @@ namespace
 
 		T const& operator[](Pos pos) const { return cells[to_index(pos)]; }
 		T      & operator[](Pos pos)       { return cells[to_index(pos)]; }
+		T const& operator[](int index) const { return cells[index]; }
+		T      & operator[](int index)       { return cells[index]; }
 		Pos end() const { return Pos{row_length, static_cast<int>(cells.size())/row_length}; }
 
-	private:
 		int to_index(Pos pos) const { return row_length * pos.y + pos.x; }
+	private:
 		int row_length;
 		std::vector<T> cells;
 	};
@@ -56,8 +60,7 @@ namespace
 		static constexpr auto unknown_risk_level = std::numeric_limits<RiskLevel>::max();
 
 		explicit CavernSolver(Grid<std::int8_t> grid) :
-			positions(Pos{grid.end().x+2, grid.end().y+2}, {}),
-			total_risk_level(Pos{0, 0}, 0)
+			positions(Pos{grid.end().x+2, grid.end().y+2}, {})
 		{
 			// add border
 			for (auto y = 0; y < grid.end().y; ++y)
@@ -78,42 +81,42 @@ namespace
 
 	private:
 		Grid<std::int8_t> positions;
-		Grid<RiskLevel> total_risk_level;
-		Pos end;
-
-		void solve_neighbours(Pos pos, bool first_level)
-		{
-			static constexpr Pos all_directions[] = {Pos{0,1}, Pos{0,-1}, Pos{1,0}, Pos{-1,0}};
-			for (const auto& dir: all_directions)
-			{
-				const auto new_pos = pos+dir;
-				if (const auto risk_level = positions[new_pos]; risk_level != border_level)
-				{
-					const auto previous_total_risk_level = total_risk_level[new_pos];
-					if (first_level || previous_total_risk_level != unknown_risk_level)
-					{
-						const auto new_total_risk_level = total_risk_level[pos] + risk_level;
-						if (new_total_risk_level < previous_total_risk_level)
-						{
-							total_risk_level[new_pos] = new_total_risk_level;
-							if (new_pos != end)
-								solve_neighbours(new_pos, false);
-						}
-					}
-				}
-			}
-		}
 
 	public:
+		struct PendingPos
+		{
+			RiskLevel total_risk_level;
+			int pos;
+			auto operator<=>(const PendingPos& rhs) const { return total_risk_level <=> rhs.total_risk_level; }
+		};
+
 		auto solve()
 		{
-			total_risk_level = Grid<RiskLevel>(positions.end(), unknown_risk_level);
-			total_risk_level[Pos{1, 1}] = 0;
-			end = positions.end() + Pos{-1, -1};
-			for(auto y = 1; y < end.y; ++y)
-				for(auto x = 1; x < end.x; ++x)
-					solve_neighbours(Pos{x, y}, true);
-			return total_risk_level[end+Pos{-1,-1}];
+			const auto all_directions = std::array<int, 4>{1, -1, positions.end().x, -positions.end().x};
+			auto total_risk_level = Grid<RiskLevel>(positions.end(), unknown_risk_level);
+			auto to_calculate = std::priority_queue<PendingPos, std::vector<PendingPos>, std::greater<>>{};
+			to_calculate.push({0, positions.to_index(Pos{1, 1})});
+			total_risk_level[positions.to_index(Pos{1,1})] = 0;
+			while (!to_calculate.empty())
+			{
+				const auto risk_pos = to_calculate.top();
+				to_calculate.pop();
+				if (total_risk_level[risk_pos.pos] == risk_pos.total_risk_level)
+					for (const auto& dir: all_directions)
+					{
+						const auto new_pos = risk_pos.pos+dir;
+						if (const auto risk_level = positions[new_pos]; risk_level != border_level)
+						{
+							const RiskLevel new_total_risk_level = risk_pos.total_risk_level + risk_level;
+							if (new_total_risk_level < total_risk_level[new_pos])
+							{
+								to_calculate.push({new_total_risk_level, new_pos});
+								total_risk_level[new_pos] = new_total_risk_level;
+							}
+						}
+					}
+			}
+			return total_risk_level[positions.end()+Pos{-2,-2}];
 		}
 	};
 
@@ -134,7 +137,7 @@ namespace
 		}
 		const auto line_size = static_cast<int>(result.size() / lines);
 		assert(line_size * lines == std::ssize(result));
-		return Grid<std::int8_t>{{line_size, lines}, std::move(result)};
+		return Grid<std::int8_t>{Pos{line_size, lines}, std::move(result)};
 	}
 
 
