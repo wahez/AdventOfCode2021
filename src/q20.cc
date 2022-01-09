@@ -15,22 +15,71 @@ namespace
 	using FixedSquareImage = std::bitset<n_pixels*n_pixels>;
 
 
+	struct Bitset
+	{
+		using value_type = bool;
+
+		explicit Bitset(int size) : bits(std::max<int>(0, (size-1)/num_bits+1)), sz(size) {}
+
+		int size() const { return sz; }
+
+		void push_back(bool v)
+		{
+			++sz;
+			bits.resize((sz-1)/num_bits+1, 0);
+			set(sz-1, v);
+		}
+
+		void set(int i, bool v)
+		{
+			const auto idx = i / num_bits;
+			const auto b = i % num_bits;
+			const auto mask = ~(std::uintmax_t{1} << std::uintmax_t{b});
+			bits[idx] = (bits[idx] & mask) | (std::uintmax_t{v} << std::uintmax_t{b});
+		}
+
+		bool operator[](int i) const
+		{
+			const auto idx = i / num_bits;
+			const auto b = i % num_bits;
+			const auto mask = std::uintmax_t{1} << std::uintmax_t{b};
+			return bits[idx] & mask;
+		}
+
+		int count() const
+		{
+			return accumulate(bits | std::views::transform([](auto&& e) { return std::popcount(e); }), 0);
+		}
+
+	private:
+		std::vector<std::uintmax_t> bits;
+		int sz;
+		static constexpr auto num_bits = 8*sizeof(std::uintmax_t);
+	};
+
+
 	class Image
 	{
 	public:
 		explicit Image(int szx = 0, int szy = 0) :
-			pixels(szx * szy, false),
-			line_width(szx)
+			pixels(szx * szy),
+			line_width(szx),
+			num_lines(szy)
 		{}
 
 		int pixels_lit() const
 		{
-			return std::ranges::count(pixels, true);
+			return pixels.count();
 		}
 
 		void set_pixel(int x, int y, bool value)
 		{
-			pixels[x + y * line_width] = value;
+			pixels.set(x + y * line_width, value);
+		}
+
+		auto get_pixel(int x, int y) const
+		{
+			return pixels[x + y * line_width];
 		}
 
 		void set_background(bool value)
@@ -44,50 +93,45 @@ namespace
 		}
 
 		auto size_x() const { return line_width; }
-		auto size_y() const { return std::ssize(pixels) / line_width; }
+		auto size_y() const { return num_lines; }
 
-		auto get_pixel_with_neighbours(int xm, int ym) const
+		template<bool safe=true>
+		FixedSquareImage<3> get_pixel_with_neighbours(int x, int y) const
 		{
-			auto result = FixedSquareImage<3>{};
-			for (auto y = ym-1; y < ym+2; ++y)
-				for (auto x = xm-1; x < xm+2; ++x)
+			auto bits = FixedSquareImage<3>{};
+			auto bit = 9;
+			for (auto ys = y-1; ys < y+2; ++ys)
+				for (auto xs = x-1; xs < x+2; ++xs)
 				{
-					if (x < 0 || y < 0 || x >= size_x() || y >= size_y())
-						result[4 -x+xm -(y-ym)*3] = background;
+					if constexpr (!safe)
+						bits[--bit] = get_pixel(xs, ys);
 					else
-						result[4 -x+xm -(y-ym)*3] = pixels[x+y*line_width];
+					{
+						if (xs < 0 || ys < 0 || xs >= size_x() || ys >= size_y())
+							bits[--bit] = background;
+						else
+							bits[--bit] = get_pixel(xs, ys);
+					}
 				}
-			return result;
+			return bits;
 		}
 
 		friend std::istream& operator>>(std::istream& is, Image& image)
 		{
 			auto num_lines = 0;
+			std::noskipws(is);
+			auto bit_line = std::ranges::istream_view<char>(is)
+					| std::views::take_while([](char c) { return c != '\n'; })
+					| std::views::transform([](char c) { return c == '#'; });
 			while (is.good())
 			{
-				switch (is.get())
-				{
-				case '.':
-					image.pixels.push_back(false);
-					break;
-				case '#':
-					image.pixels.push_back(true);
-					break;
-				case EOF:
-					break;
-				case '\n':
-					++num_lines;
-					image.line_width = std::ssize(image.pixels) / num_lines;
-					if (is.peek() == '\n')
-					{
-						assert(std::ssize(image.pixels) % num_lines == 0);
-						return is;
-					}
-					break;
-				default:
-					throw std::runtime_error("Could not parse image");
-				}
+				std::ranges::copy(bit_line, std::back_inserter(image.pixels));
+				++num_lines;
 			}
+			--num_lines;
+			assert(std::ssize(image.pixels) % num_lines == 0);
+			image.line_width = image.pixels.size() / num_lines;
+			image.num_lines = num_lines;
 			return is;
 		}
 
@@ -102,8 +146,9 @@ namespace
 			return os;
 		}
 	private:
-		std::vector<bool> pixels;
+		Bitset pixels;
 		int line_width;
+		int num_lines;
 		bool background=false;
 	};
 
@@ -117,19 +162,29 @@ namespace
 
 		Image enhance(const Image& image) const
 		{
-			auto result = Image{image.size_x()+2, static_cast<int>(image.size_y()+2)};
+			auto result = Image{image.size_x()+2, image.size_y()+2};
 			if (image.get_background())
 				result.set_background(bits[0]);
 			else
 				result.set_background(bits[511]);
-			for (auto x = 0; x < result.size_x(); ++x)
-			{
+			for (auto x: {0, 1, result.size_x()-2, result.size_x()-1})
 				for (auto y = 0; y < result.size_y(); ++y)
 				{
-					const auto pixel_with_neighbours = image.get_pixel_with_neighbours(x-1, y-1);
-					result.set_pixel(x, y, enhance_pixel(pixel_with_neighbours));
+					const auto bits = image.get_pixel_with_neighbours(x-1, y-1);
+					result.set_pixel(x, y, enhance_pixel(bits));
 				}
-			}
+			for (auto y: {0, 1, result.size_y()-2, result.size_y()-1})
+				for (auto x = 0; x < result.size_x(); ++x)
+				{
+					const auto bits = image.get_pixel_with_neighbours(x-1, y-1);
+					result.set_pixel(x, y, enhance_pixel(bits));
+				}
+			for (auto y = 2; y < result.size_y()-2; ++y)
+				for (auto x = 2; x < result.size_x()-2; ++x)
+				{
+					const auto bits = image.get_pixel_with_neighbours<false>(x-1, y-1);
+					result.set_pixel(x, y, enhance_pixel(bits));
+				}
 			return result;
 		}
 
