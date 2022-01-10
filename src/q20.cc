@@ -3,7 +3,7 @@
 #include <cassert>
 #include <istream>
 #include <ranges>
-#include <vector>
+#include <queue>
 #include "util.h"
 
 
@@ -19,15 +19,22 @@ namespace
 	{
 		using value_type = bool;
 
-		explicit Bitset(int size) : bits(std::max<int>(0, (size-1)/num_bits+1)), sz(size) {}
+		explicit Bitset(int size, bool v) : bits((size-1)/num_bits+1, v ? ~std::uintmax_t{0} : 0), sz(size) {}
 
 		int size() const { return sz; }
 
-		void push_back(bool v)
+		void resize(int s)
 		{
-			++sz;
-			bits.resize((sz-1)/num_bits+1, 0);
-			set(sz-1, v);
+			bits.resize((s-1)/num_bits+1);
+			sz = s;
+		}
+
+		Bitset& push_back(bool v)
+		{
+			const auto i = sz;
+			resize(sz+1);
+			set(i, v);
+			return *this;
 		}
 
 		void set(int i, bool v)
@@ -48,11 +55,83 @@ namespace
 
 		int count() const
 		{
-			return accumulate(bits | std::views::transform([](auto&& e) { return std::popcount(e); }), 0);
+			auto c = 0;
+			for (auto i = 0; i < std::ssize(bits)-1; ++i)
+				c += std::popcount(bits[i]);
+			return c + std::popcount(bits.back() << (num_bits-(sz%num_bits)));
+		}
+
+		Bitset& operator<<=(int i)
+		{
+			const auto to_add = i / num_bits;
+			const auto to_shift = i % num_bits;
+			resize(sz + to_shift);
+			if (i % num_bits != 0)
+				for (auto i = std::ssize(bits)-1; i > 1; --i)
+				{
+					const auto b = bits[i-1];
+					bits[i] = (bits[i] << to_shift) | (b >> (num_bits-to_shift));
+					bits[i-1] = b << to_shift;
+				}
+			bits.push_front(to_add);
+			resize(sz + to_add * num_bits);
+			return *this;
+		}
+
+		[[nodiscard]]
+		Bitset concat(const Bitset& other) const
+		{
+			auto result = *this;
+			result <<= other.size();
+			result |= other;
+			return result;
+		}
+
+		Bitset& operator|=(Bitset other)
+		{
+			do_op(std::move(other), [](auto&& l, auto&& r) { return l |= r; });
+			return *this;
+		}
+
+		std::intmax_t operator&(std::intmax_t mask) const
+		{
+			return bits[0] & mask;
+		}
+
+		Bitset& operator>>=(int i)
+		{
+			const auto to_erase = i / num_bits;
+			const auto to_shift = i % num_bits;
+			bits.erase(bits.begin(), bits.begin() + to_erase);
+			if (!bits.empty())
+				bits[0] >>= to_shift;
+			for (auto i = 1; i < std::ssize(bits); ++i)
+			{
+				const auto b = bits[i];
+				bits[i-1] |= b << (num_bits-to_shift);
+				bits[i] = b >> to_shift;
+			}
+			resize(sz-i);
+			return *this;
+		}
+
+		Bitset operator>>(int i) const
+		{
+			auto result = *this;
+			return result >>= i;
 		}
 
 	private:
-		std::vector<std::uintmax_t> bits;
+		void do_op(Bitset other, auto&& func)
+		{
+			const auto new_size = std::max(size(), other.size());
+			resize(new_size);
+			other.resize(new_size);
+			for (auto i = 0; i < std::ssize(bits); ++i)
+				func(bits[i], other.bits[i]);
+		}
+
+		std::deque<std::uintmax_t> bits;
 		int sz;
 		static constexpr auto num_bits = 8*sizeof(std::uintmax_t);
 	};
@@ -62,7 +141,7 @@ namespace
 	{
 	public:
 		explicit Image(int szx = 0, int szy = 0) :
-			pixels(szx * szy),
+			pixels(szx * szy, false),
 			line_width(szx),
 			num_lines(szy)
 		{}
@@ -80,6 +159,14 @@ namespace
 		auto get_pixel(int x, int y) const
 		{
 			return pixels[x + y * line_width];
+		}
+
+		auto get_pixel_row(int y) const
+		{
+			auto row = pixels;
+			row <<= y * line_width;
+			row.resize(line_width);
+			return row;
 		}
 
 		void set_background(bool value)
@@ -163,28 +250,42 @@ namespace
 		Image enhance(const Image& image) const
 		{
 			auto result = Image{image.size_x()+2, image.size_y()+2};
-			if (image.get_background())
+			const auto background = image.get_background();
+			if (background)
 				result.set_background(bits[0]);
 			else
 				result.set_background(bits[511]);
-			for (auto x: {0, 1, result.size_x()-2, result.size_x()-1})
-				for (auto y = 0; y < result.size_y(); ++y)
+			auto rows = std::array<Bitset, 3>{{
+				Bitset{result.size_x(), background},
+				Bitset{result.size_x(), background},
+				Bitset{result.size_x(), background}}};
+			// TODO lambda
+			for (auto y = 0; y < image.size_y(); ++y)
+			{
+				rows[0] = rows[1];
+				rows[1] = rows[2];
+				rows[2] = Bitset{2, background}.concat(image.get_pixel_row(y)).concat(Bitset{2, background});
+				for (auto x = 0; x < image.size_x(); ++x)
 				{
-					const auto bits = image.get_pixel_with_neighbours(x-1, y-1);
+					const auto bits = ((rows[0] >> (x-6)) & 0b111000000)
+					                | ((rows[1] >> (x-3)) & 0b000111000)
+					                | ((rows[2] >>  x   ) & 0b000000111);
 					result.set_pixel(x, y, enhance_pixel(bits));
 				}
-			for (auto y: {0, 1, result.size_y()-2, result.size_y()-1})
-				for (auto x = 0; x < result.size_x(); ++x)
+			}
+			for (auto y = image.size_y(); y < result.size_y(); ++y)
+			{
+				rows[0] = rows[1];
+				rows[1] = rows[2];
+				rows[2] = Bitset{result.size_x(), background};
+				for (auto x = 0; x < image.size_x(); ++x)
 				{
-					const auto bits = image.get_pixel_with_neighbours(x-1, y-1);
+					const auto bits = ((rows[0] >> (x-6)) & 0b111000000)
+					                | ((rows[1] >> (x-3)) & 0b000111000)
+					                | ((rows[2] >>  x   ) & 0b000000111);
 					result.set_pixel(x, y, enhance_pixel(bits));
 				}
-			for (auto y = 2; y < result.size_y()-2; ++y)
-				for (auto x = 2; x < result.size_x()-2; ++x)
-				{
-					const auto bits = image.get_pixel_with_neighbours<false>(x-1, y-1);
-					result.set_pixel(x, y, enhance_pixel(bits));
-				}
+			}
 			return result;
 		}
 
