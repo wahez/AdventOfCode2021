@@ -40,16 +40,16 @@ namespace
 		void set(int i, bool v)
 		{
 			const auto idx = i / num_bits;
-			const auto b = i % num_bits;
-			const auto mask = ~(std::uintmax_t{1} << std::uintmax_t{b});
-			bits[idx] = (bits[idx] & mask) | (std::uintmax_t{v} << std::uintmax_t{b});
+			const auto b = static_cast<std::uintmax_t>(i % num_bits);
+			const auto mask = ~(std::uintmax_t{1} << b);
+			bits[idx] = (bits[idx] & mask) | (std::uintmax_t{v} << b);
 		}
 
 		bool operator[](int i) const
 		{
 			const auto idx = i / num_bits;
-			const auto b = i % num_bits;
-			const auto mask = std::uintmax_t{1} << std::uintmax_t{b};
+			const auto b = static_cast<std::uintmax_t>(i % num_bits);
+			const auto mask = std::uintmax_t{1} << b;
 			return bits[idx] & mask;
 		}
 
@@ -133,7 +133,7 @@ namespace
 
 		std::deque<std::uintmax_t> bits;
 		int sz;
-		static constexpr auto num_bits = 8*sizeof(std::uintmax_t);
+		static constexpr int num_bits = 8*sizeof(std::uintmax_t);
 	};
 
 
