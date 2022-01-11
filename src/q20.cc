@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <bitset>
 #include <cassert>
-#include <istream>
+#include <iostream>
 #include <ranges>
 #include <queue>
 #include "util.h"
@@ -11,21 +11,21 @@ namespace
 {
 
 
-	template<int n_pixels>
-	using FixedSquareImage = std::bitset<n_pixels*n_pixels>;
-
-
 	struct Bitset
 	{
 		using value_type = bool;
 
 		explicit Bitset(int size, bool v) : bits((size-1)/num_bits+1, v ? ~std::uintmax_t{0} : 0), sz(size) {}
 
+		[[nodiscard]]
 		int size() const { return sz; }
 
 		void resize(int s)
 		{
-			bits.resize((s-1)/num_bits+1);
+			bits.resize((s-1)/num_bits+1, 0);
+			// TODO optimize
+			for (; sz < s; ++sz)
+				set(sz, false);
 			sz = s;
 		}
 
@@ -45,6 +45,7 @@ namespace
 			bits[idx] = (bits[idx] & mask) | (std::uintmax_t{v} << b);
 		}
 
+		[[nodiscard]]
 		bool operator[](int i) const
 		{
 			const auto idx = i / num_bits;
@@ -53,6 +54,7 @@ namespace
 			return bits[idx] & mask;
 		}
 
+		[[nodiscard]]
 		int count() const
 		{
 			auto c = 0;
@@ -66,25 +68,30 @@ namespace
 			const auto to_add = i / num_bits;
 			const auto to_shift = i % num_bits;
 			resize(sz + to_shift);
-			if (i % num_bits != 0)
-				for (auto i = std::ssize(bits)-1; i > 1; --i)
+			if (to_shift != 0)
+			{
+				bits.back() <<= to_shift;
+				for (auto i = std::ssize(bits)-1; i > 0; --i)
 				{
 					const auto b = bits[i-1];
 					bits[i] = (bits[i] << to_shift) | (b >> (num_bits-to_shift));
 					bits[i-1] = b << to_shift;
 				}
-			bits.push_front(to_add);
-			resize(sz + to_add * num_bits);
+			}
+			if (to_add)
+			{
+				bits.insert(bits.begin(), to_add, 0);
+				sz += to_add * num_bits;
+			}
 			return *this;
 		}
 
 		[[nodiscard]]
-		Bitset concat(const Bitset& other) const
+		Bitset& shift_in(Bitset other)
 		{
-			auto result = *this;
-			result <<= other.size();
-			result |= other;
-			return result;
+			(*this) <<= other.size();
+			(*this) |= other;
+			return *this;
 		}
 
 		Bitset& operator|=(Bitset other)
@@ -93,6 +100,7 @@ namespace
 			return *this;
 		}
 
+		[[nodiscard]]
 		std::intmax_t operator&(std::intmax_t mask) const
 		{
 			return bits[0] & mask;
@@ -115,6 +123,7 @@ namespace
 			return *this;
 		}
 
+		[[nodiscard]]
 		Bitset operator>>(int i) const
 		{
 			auto result = *this;
@@ -164,7 +173,7 @@ namespace
 		auto get_pixel_row(int y) const
 		{
 			auto row = pixels;
-			row <<= y * line_width;
+			row >>= y * line_width;
 			row.resize(line_width);
 			return row;
 		}
@@ -181,27 +190,6 @@ namespace
 
 		auto size_x() const { return line_width; }
 		auto size_y() const { return num_lines; }
-
-		template<bool safe=true>
-		FixedSquareImage<3> get_pixel_with_neighbours(int x, int y) const
-		{
-			auto bits = FixedSquareImage<3>{};
-			auto bit = 9;
-			for (auto ys = y-1; ys < y+2; ++ys)
-				for (auto xs = x-1; xs < x+2; ++xs)
-				{
-					if constexpr (!safe)
-						bits[--bit] = get_pixel(xs, ys);
-					else
-					{
-						if (xs < 0 || ys < 0 || xs >= size_x() || ys >= size_y())
-							bits[--bit] = background;
-						else
-							bits[--bit] = get_pixel(xs, ys);
-					}
-				}
-			return bits;
-		}
 
 		friend std::istream& operator>>(std::istream& is, Image& image)
 		{
@@ -232,7 +220,7 @@ namespace
 			}
 			return os;
 		}
-	private:
+//	private:
 		Bitset pixels;
 		int line_width;
 		int num_lines;
@@ -242,9 +230,9 @@ namespace
 
 	struct PixelEnhancer
 	{
-		bool enhance_pixel(const FixedSquareImage<3>& pixel_with_neighbours) const
+		bool enhance_pixel(std::uintmax_t index) const
 		{
-			return bits[511-pixel_with_neighbours.to_ulong()];
+			return bits[511-index];
 		}
 
 		Image enhance(const Image& image) const
@@ -256,36 +244,32 @@ namespace
 			else
 				result.set_background(bits[511]);
 			auto rows = std::array<Bitset, 3>{{
-				Bitset{result.size_x(), background},
-				Bitset{result.size_x(), background},
-				Bitset{result.size_x(), background}}};
-			// TODO lambda
+					Bitset{result.size_x(), background},
+					Bitset{result.size_x(), background},
+					Bitset{result.size_x(), background}}};
+			auto process_row = [&](const auto& row, int y)
+			{
+				rows[0] = rows[1];
+				rows[1] = rows[2];
+				rows[2] = Bitset{2, background}.shift_in(image.get_pixel_row(y)).shift_in(Bitset{2, background});
+				for (auto x = 0; x < image.size_x()+2; ++x)
+				{
+					const auto bits = (((rows[0] >> x) & 0b001) << 8)
+					                | (((rows[0] >> x) & 0b010) << 6)
+					                | (((rows[0] >> x) & 0b100) << 4)
+					                | (((rows[1] >> x) & 0b001) << 5)
+					                | (((rows[1] >> x) & 0b010) << 3)
+					                | (((rows[1] >> x) & 0b100) << 1)
+					                | (((rows[2] >> x) & 0b001) << 2)
+					                |  ((rows[2] >> x) & 0b010)
+					                |  ((rows[2] >> (x+2)) & 0b1);
+					result.set_pixel(x, y, enhance_pixel(bits));
+				}
+			};
 			for (auto y = 0; y < image.size_y(); ++y)
-			{
-				rows[0] = rows[1];
-				rows[1] = rows[2];
-				rows[2] = Bitset{2, background}.concat(image.get_pixel_row(y)).concat(Bitset{2, background});
-				for (auto x = 0; x < image.size_x(); ++x)
-				{
-					const auto bits = ((rows[0] >> (x-6)) & 0b111000000)
-					                | ((rows[1] >> (x-3)) & 0b000111000)
-					                | ((rows[2] >>  x   ) & 0b000000111);
-					result.set_pixel(x, y, enhance_pixel(bits));
-				}
-			}
+				process_row(Bitset{2, background}.shift_in(image.get_pixel_row(y)).shift_in(Bitset{2, background}), y);
 			for (auto y = image.size_y(); y < result.size_y(); ++y)
-			{
-				rows[0] = rows[1];
-				rows[1] = rows[2];
-				rows[2] = Bitset{result.size_x(), background};
-				for (auto x = 0; x < image.size_x(); ++x)
-				{
-					const auto bits = ((rows[0] >> (x-6)) & 0b111000000)
-					                | ((rows[1] >> (x-3)) & 0b000111000)
-					                | ((rows[2] >>  x   ) & 0b000000111);
-					result.set_pixel(x, y, enhance_pixel(bits));
-				}
-			}
+				process_row(Bitset{result.size_x(), background}, y);
 			return result;
 		}
 

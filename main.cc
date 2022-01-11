@@ -129,7 +129,7 @@ int main(int argc, char** argv)
 	run(q18a, "18a", "q18.tst", 4140);
 	run(q18a, "18a", "q18.inp");
 	run(q18b, "18b", "q18.tst", 3993);
-//	run(q18b, "18b", "q18.inp");
+	run(q18b, "18b", "q18.inp");
 	run(q19a, "19a", "q19.tst", 79);
 	run(q19a, "19a", "q19.inp");
 	run(q19b, "19b", "q19.tst", 3621);
